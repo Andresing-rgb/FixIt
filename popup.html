@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Motivos de Rechazo</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">MR</div>
+      <div class="titles">
+        <h1>Motivos de Rechazo</h1>
+        <p>Crear, editar, copiar e insertar plantillas</p>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input id="search" class="input" type="text" placeholder="Buscar (código, motivo, título, texto)..." />
+
+      <select id="filter-activo" class="input">
+        <option value="activos" selected>Solo activos</option>
+        <option value="todos">Todos</option>
+      </select>
+
+      <select id="filter-motivo" class="input">
+        <option value="" selected>Todos los motivos</option>
+        <option value="DATO ILEGIBLE">DATO ILEGIBLE</option>
+        <option value="DOCUMENTO AUTOMÁTICO">DOCUMENTO AUTOMÁTICO</option>
+        <option value="DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECÁNICA">DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECÁNICA</option>
+        <option value="DOCUMENTO EXPEDIDO EN UN PAÍS DIFERENTE A COLOMBIA">DOCUMENTO EXPEDIDO EN UN PAÍS DIFERENTE A COLOMBIA</option>
+        <option value="DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCIÓN">DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCIÓN</option>
+        <option value="DOCUMENTO MAL CLASIFICADO">DOCUMENTO MAL CLASIFICADO</option>
+        <option value="DOCUMENTO MAL DIGITALIZADO">DOCUMENTO MAL DIGITALIZADO</option>
+        <option value="DOCUMENTO NO VÁLIDO PARA FINES DE APOSTILLA Y/O LEGALIZACIÓN">DOCUMENTO NO VÁLIDO PARA FINES DE APOSTILLA Y/O LEGALIZACIÓN</option>
+        <option value="ERROR PAÍS DESTINO">ERROR PAÍS DESTINO</option>
+        <option value="FALTA FIRMA DE SERVIDOR PÚBLICO">FALTA FIRMA DE SERVIDOR PÚBLICO</option>
+        <option value="INCONSISTENCIA EN DOCUMENTO">INCONSISTENCIA EN DOCUMENTO</option>
+        <option value="LA AUTENTICACIÓN DE COPIA ANTE NOTARIO PÚBLICO NO ES VÁLIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO">LA AUTENTICACIÓN DE COPIA ANTE NOTARIO PÚBLICO NO ES VÁLIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO</option>
+        <option value="DOCUMENTO NO SE ENCUENTRA VIGENTE">DOCUMENTO NO SE ENCUENTRA VIGENTE</option>
+      </select>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- FORM -->
+    <section class="card">
+      <div class="card-title">
+        <h2 id="form-title">Nueva plantilla</h2>
+        <span class="badge">Local</span>
+      </div>
+
+      <input id="edit-id" type="hidden" />
+
+      <label class="label">Código</label>
+      <input id="codigo" class="input" placeholder="Ej: DI-01, DA-04-A" />
+
+      <label class="label">Motivo de Rechazo</label>
+      <select id="motivo" class="input">
+        <option value="" disabled selected>Selecciona un motivo…</option>
+        <option value="DATO ILEGIBLE">DATO ILEGIBLE</option>
+        <option value="DOCUMENTO AUTOMÁTICO">DOCUMENTO AUTOMÁTICO</option>
+        <option value="DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECÁNICA">DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECÁNICA</option>
+        <option value="DOCUMENTO EXPEDIDO EN UN PAÍS DIFERENTE A COLOMBIA">DOCUMENTO EXPEDIDO EN UN PAÍS DIFERENTE A COLOMBIA</option>
+        <option value="DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCIÓN">DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCIÓN</option>
+        <option value="DOCUMENTO MAL CLASIFICADO">DOCUMENTO MAL CLASIFICADO</option>
+        <option value="DOCUMENTO MAL DIGITALIZADO">DOCUMENTO MAL DIGITALIZADO</option>
+        <option value="DOCUMENTO NO VÁLIDO PARA FINES DE APOSTILLA Y/O LEGALIZACIÓN">DOCUMENTO NO VÁLIDO PARA FINES DE APOSTILLA Y/O LEGALIZACIÓN</option>
+        <option value="ERROR PAÍS DESTINO">ERROR PAÍS DESTINO</option>
+        <option value="FALTA FIRMA DE SERVIDOR PÚBLICO">FALTA FIRMA DE SERVIDOR PÚBLICO</option>
+        <option value="INCONSISTENCIA EN DOCUMENTO">INCONSISTENCIA EN DOCUMENTO</option>
+        <option value="LA AUTENTICACIÓN DE COPIA ANTE NOTARIO PÚBLICO NO ES VÁLIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO">LA AUTENTICACIÓN DE COPIA ANTE NOTARIO PÚBLICO NO ES VÁLIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO</option>
+        <option value="DOCUMENTO NO SE ENCUENTRA VIGENTE">DOCUMENTO NO SE ENCUENTRA VIGENTE</option>
+      </select>
+
+      <label class="label">Título</label>
+      <input id="titulo" class="input" placeholder="Ej: ACTO NOTARIAL NO COINCIDE" />
+
+      <label class="label">Descripción</label>
+      <textarea id="descripcion" class="textarea" rows="8" placeholder="Texto completo de la plantilla..."></textarea>
+
+      <div class="actions">
+        <button id="btn-save" class="btn primary">Guardar</button>
+        <button id="btn-update" class="btn primary" style="display:none">Actualizar</button>
+        <button id="btn-cancel" class="btn ghost" style="display:none">Cancelar</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="actions">
+        <button id="btn-export" class="btn">Exportar JSON</button>
+        <input id="file-import" type="file" accept="application/json"
+        style="position:fixed; left:-9999px; top:0; width:1px; height:1px; opacity:0;" />
+        <button id="btn-import" class="btn">Importar JSON</button>
+      </div>
+    </section>
+
+    <!-- LIST -->
+    <section class="card">
+      <div class="card-title">
+        <h2>Plantillas</h2>
+        <span id="count" class="muted">0</span>
+      </div>
+
+      <div id="list" class="list">
+        <p class="muted">Cargando...</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span class="muted">Tip: haz clic en el campo del formulario en la página y luego usa “Insertar”.</span>
+  </footer>
+
+  <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

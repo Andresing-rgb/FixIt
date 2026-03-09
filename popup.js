@@ -1,526 +1,568 @@
-const STORAGE_KEY = "plantillas";
+const STORAGE_KEYS = {
+  PLANTILLAS: "fixit_plantillas",
+  FAVORITOS: "fixit_favoritos"
+};
 
-// Estado UI
-let currentSearch = "";
-let currentActivoFilter = "activos"; // "activos" | "todos"
-let currentMotivoFilter = "";        // "" = todos
+const MAX_FAVORITOS = 15;
 
-let toastTimer = null;
+let state = {
+  plantillas: [],
+  favoritos: [],
+  filtroBusqueda: "",
+  filtroMotivo: "",
+  editingTemplateId: null,
+  pendingFavoriteTemplateId: null
+};
 
-/* ============================
-   Utilidades
-============================ */
+const els = {};
 
-function uuid() {
-  return crypto.randomUUID();
+document.addEventListener("DOMContentLoaded", async () => {
+  cacheElements();
+  bindEvents();
+  await initData();
+  renderAll();
+});
+
+function cacheElements() {
+  els.searchInput = document.getElementById("searchInput");
+  els.motivoFilter = document.getElementById("motivoFilter");
+  els.btnNuevaPlantilla = document.getElementById("btnNuevaPlantilla");
+  els.btnExportar = document.getElementById("btnExportar");
+  els.btnImportar = document.getElementById("btnImportar");
+  els.fileImport = document.getElementById("fileImport");
+
+  els.favoritosContainer = document.getElementById("favoritosContainer");
+  els.favoritosCount = document.getElementById("favoritosCount");
+
+  els.listaPlantillas = document.getElementById("listaPlantillas");
+  els.plantillasCount = document.getElementById("plantillasCount");
+  els.emptyState = document.getElementById("emptyState");
+
+  els.modalPlantilla = document.getElementById("modalPlantilla");
+  els.modalPlantillaTitle = document.getElementById("modalPlantillaTitle");
+  els.templateCodigo = document.getElementById("templateCodigo");
+  els.templateMotivo = document.getElementById("templateMotivo");
+  els.templateTitulo = document.getElementById("templateTitulo");
+  els.templateTexto = document.getElementById("templateTexto");
+  els.btnGuardarPlantilla = document.getElementById("btnGuardarPlantilla");
+  els.btnCancelarPlantilla = document.getElementById("btnCancelarPlantilla");
+
+  els.modalFavorito = document.getElementById("modalFavorito");
+  els.favoritoNombre = document.getElementById("favoritoNombre");
+  els.btnGuardarFavorito = document.getElementById("btnGuardarFavorito");
+  els.btnCancelarFavorito = document.getElementById("btnCancelarFavorito");
+
+  els.plantillaCardTemplate = document.getElementById("plantillaCardTemplate");
 }
 
-function escapeHtml(str = "") {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-/* ============================
-   Toast
-============================ */
-
-function showToast(message, title = "Listo", ms = 1000) {
-  const el = document.getElementById("toast");
-  if (!el) return;
-
-  el.innerHTML = `
-    <p class="t-title">${escapeHtml(title)}</p>
-    <p class="t-msg">${escapeHtml(message)}</p>
-  `;
-
-  el.classList.remove("show");
-  void el.offsetWidth; // reflow
-  el.classList.add("show");
-
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), ms);
-}
-
-/* ============================
-   Storage (LOCAL)
-============================ */
-
-async function getPlantillas() {
-  const result = await chrome.storage.local.get([STORAGE_KEY]);
-  const list = result[STORAGE_KEY];
-  return Array.isArray(list) ? list : [];
-}
-
-async function setPlantillas(plantillas) {
-  await chrome.storage.local.set({ [STORAGE_KEY]: plantillas });
-}
-
-/* ============================
-   Form helpers
-============================ */
-
-function setEditMode(on) {
-  const btnSave = document.getElementById("btn-save");
-  const btnUpdate = document.getElementById("btn-update");
-  const btnCancel = document.getElementById("btn-cancel");
-  const formTitle = document.getElementById("form-title");
-
-  if (btnSave) btnSave.style.display = on ? "none" : "inline-block";
-  if (btnUpdate) btnUpdate.style.display = on ? "inline-block" : "none";
-  if (btnCancel) btnCancel.style.display = on ? "inline-block" : "none";
-  if (formTitle) formTitle.textContent = on ? "Editar plantilla" : "Nueva plantilla";
-}
-
-function fillForm(p) {
-  document.getElementById("codigo").value = p.codigo || "";
-  document.getElementById("motivo").value = p.motivo || p.categoria || "";
-  document.getElementById("titulo").value = p.titulo || "";
-  document.getElementById("descripcion").value = p.descripcion || "";
-  document.getElementById("edit-id").value = p.id || "";
-}
-
-function clearForm() {
-  document.getElementById("codigo").value = "";
-  document.getElementById("motivo").value = "";
-  document.getElementById("titulo").value = "";
-  document.getElementById("descripcion").value = "";
-  document.getElementById("edit-id").value = "";
-  setEditMode(false);
-}
-
-function readForm() {
-  const codigo = document.getElementById("codigo").value.trim();
-  const motivo = document.getElementById("motivo").value.trim();
-  const titulo = document.getElementById("titulo").value.trim();
-  const descripcion = document.getElementById("descripcion").value.trim();
-  return { codigo, motivo, titulo, descripcion };
-}
-
-function validateForm({ codigo, motivo, titulo, descripcion }) {
-  if (!codigo || !motivo || !titulo || !descripcion) {
-    showToast("Todos los campos son obligatorios.", "Error", 1400);
-    return false;
-  }
-  return true;
-}
-
-/* ============================
-   CRUD
-============================ */
-
-async function savePlantilla() {
-  const form = readForm();
-  if (!validateForm(form)) return;
-
-  const plantillas = await getPlantillas();
-
-  plantillas.unshift({
-    id: uuid(),
-    codigo: form.codigo,
-    motivo: form.motivo,
-    titulo: form.titulo,
-    descripcion: form.descripcion,
-    activo: true
+function bindEvents() {
+  els.searchInput.addEventListener("input", (e) => {
+    state.filtroBusqueda = normalizeText(e.target.value);
+    renderTemplates();
   });
 
-  await setPlantillas(plantillas);
-  clearForm();
-  await render();
+  els.motivoFilter.addEventListener("change", (e) => {
+    state.filtroMotivo = e.target.value;
+    renderTemplates();
+  });
 
-  showToast("Plantilla creada.", "Guardar", 1000);
+  els.btnNuevaPlantilla.addEventListener("click", openCreateTemplateModal);
+  els.btnGuardarPlantilla.addEventListener("click", handleSaveTemplate);
+  els.btnCancelarPlantilla.addEventListener("click", closeTemplateModal);
+
+  els.btnGuardarFavorito.addEventListener("click", handleSaveFavorite);
+  els.btnCancelarFavorito.addEventListener("click", closeFavoriteModal);
+
+  els.btnExportar.addEventListener("click", exportTemplatesAsJson);
+  els.btnImportar.addEventListener("click", () => els.fileImport.click());
+  els.fileImport.addEventListener("change", handleImportFile);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (!els.modalFavorito.classList.contains("hidden")) {
+        closeFavoriteModal();
+        return;
+      }
+
+      if (!els.modalPlantilla.classList.contains("hidden")) {
+        closeTemplateModal();
+      }
+    }
+  });
 }
 
-async function updatePlantilla() {
-  const editId = document.getElementById("edit-id").value;
-  if (!editId) {
-    showToast("No hay plantilla seleccionada para editar.", "Error", 1400);
+async function initData() {
+  const storedPlantillas = await getStorage(STORAGE_KEYS.PLANTILLAS);
+  const storedFavoritos = await getStorage(STORAGE_KEYS.FAVORITOS);
+
+  if (Array.isArray(storedPlantillas)) {
+    state.plantillas = sanitizeTemplates(storedPlantillas);
+  } else {
+    state.plantillas = [];
+    await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
+  }
+
+  if (Array.isArray(storedFavoritos)) {
+    state.favoritos = sanitizeFavorites(storedFavoritos);
+  } else {
+    state.favoritos = [];
+    await setStorage(STORAGE_KEYS.FAVORITOS, state.favoritos);
+  }
+}
+
+function renderAll() {
+  renderMotivoFilter();
+  renderFavorites();
+  renderTemplates();
+}
+
+function renderMotivoFilter() {
+  const motivos = [...new Set(state.plantillas.map((p) => p.motivo.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "es"));
+
+  const current = state.filtroMotivo;
+  els.motivoFilter.innerHTML = `<option value="">Todos los motivos de rechazo</option>`;
+
+  motivos.forEach((motivo) => {
+    const option = document.createElement("option");
+    option.value = motivo;
+    option.textContent = motivo;
+
+    if (motivo === current) {
+      option.selected = true;
+    }
+
+    els.motivoFilter.appendChild(option);
+  });
+}
+
+function renderFavorites() {
+  els.favoritosContainer.innerHTML = "";
+  els.favoritosCount.textContent = `${state.favoritos.length}/${MAX_FAVORITOS}`;
+
+  if (!state.favoritos.length) {
+    const empty = document.createElement("div");
+    empty.className = "helper-text";
+    empty.textContent = "Aún no hay favoritos guardados.";
+    els.favoritosContainer.appendChild(empty);
     return;
   }
 
-  const form = readForm();
-  if (!validateForm(form)) return;
+  state.favoritos.forEach((fav) => {
+    const btn = document.createElement("button");
+    btn.className = "favorito-chip";
+    btn.textContent = fav.nombre;
+    btn.title = `${fav.nombre}\n\nClic: copiar\nClic derecho: eliminar`;
+    btn.style.background = fav.color;
 
-  const plantillas = await getPlantillas();
-  const idx = plantillas.findIndex(p => p.id === editId);
+    btn.addEventListener("click", async () => {
+      await copyToClipboard(fav.texto || "");
+      showToastFallback(`Favorito "${fav.nombre}" copiado.`);
+    });
 
-  if (idx === -1) {
-    showToast("No se encontró la plantilla a editar.", "Error", 1400);
-    clearForm();
+    btn.addEventListener("contextmenu", async (e) => {
+      e.preventDefault();
+      await removeFavoriteById(fav.id, fav.nombre);
+    });
+
+    btn.addEventListener("mousedown", async (e) => {
+      if (e.button === 2) {
+        e.preventDefault();
+        await removeFavoriteById(fav.id, fav.nombre);
+      }
+    });
+
+    els.favoritosContainer.appendChild(btn);
+  });
+}
+
+async function removeFavoriteById(id, nombre = "este favorito") {
+  const ok = confirm(`¿Deseas eliminar el favorito "${nombre}"?`);
+  if (!ok) return;
+
+  state.favoritos = state.favoritos.filter((item) => item.id !== id);
+  await setStorage(STORAGE_KEYS.FAVORITOS, state.favoritos);
+  renderFavorites();
+}
+
+function renderTemplates() {
+  const filtered = getFilteredTemplates();
+  els.listaPlantillas.innerHTML = "";
+  els.plantillasCount.textContent = String(filtered.length);
+
+  if (!filtered.length) {
+    els.emptyState.classList.remove("hidden");
     return;
   }
 
-  const activoActual = Boolean(plantillas[idx].activo);
+  els.emptyState.classList.add("hidden");
 
-  plantillas[idx] = {
-    id: editId,
-    codigo: form.codigo,
-    motivo: form.motivo,
-    titulo: form.titulo,
-    descripcion: form.descripcion,
-    activo: activoActual
+  filtered.forEach((template) => {
+    const fragment = els.plantillaCardTemplate.content.cloneNode(true);
+
+    fragment.querySelector(".plantilla-codigo").textContent = template.codigo || "Sin código";
+    fragment.querySelector(".plantilla-motivo").textContent = template.motivo || "Sin motivo";
+    fragment.querySelector(".plantilla-titulo").textContent = template.titulo || "Sin título";
+    fragment.querySelector(".plantilla-texto").textContent = template.texto || "";
+
+    fragment.querySelector(".btn-copy").addEventListener("click", async () => {
+      await copyToClipboard(template.texto || "");
+      showToastFallback(`Plantilla "${template.titulo}" copiada.`);
+    });
+
+    fragment.querySelector(".btn-fav").addEventListener("click", () => {
+      openFavoriteModal(template.id);
+    });
+
+    fragment.querySelector(".btn-edit").addEventListener("click", () => {
+      openEditTemplateModal(template.id);
+    });
+
+    fragment.querySelector(".btn-delete").addEventListener("click", async () => {
+      const ok = confirm(`¿Eliminar la plantilla "${template.titulo}"?`);
+      if (!ok) return;
+
+      state.plantillas = state.plantillas.filter((item) => item.id !== template.id);
+      await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
+
+      if (state.filtroMotivo && !state.plantillas.some((p) => p.motivo === state.filtroMotivo)) {
+        state.filtroMotivo = "";
+        els.motivoFilter.value = "";
+      }
+
+      renderAll();
+    });
+
+    els.listaPlantillas.appendChild(fragment);
+  });
+}
+
+function getFilteredTemplates() {
+  return state.plantillas.filter((template) => {
+    const matchesMotivo =
+      !state.filtroMotivo || template.motivo === state.filtroMotivo;
+
+    const codigo = normalizeText(template.codigo);
+    const titulo = normalizeText(template.titulo);
+
+    const matchesSearch =
+      !state.filtroBusqueda ||
+      codigo.includes(state.filtroBusqueda) ||
+      titulo.includes(state.filtroBusqueda);
+
+    return matchesMotivo && matchesSearch;
+  });
+}
+
+function openCreateTemplateModal() {
+  state.editingTemplateId = null;
+  els.modalPlantillaTitle.textContent = "Nueva plantilla";
+  els.templateCodigo.value = "";
+  els.templateMotivo.value = "";
+  els.templateTitulo.value = "";
+  els.templateTexto.value = "";
+  openModal(els.modalPlantilla);
+
+  setTimeout(() => {
+    els.templateCodigo.focus();
+  }, 50);
+}
+
+function openEditTemplateModal(templateId) {
+  const template = state.plantillas.find((item) => item.id === templateId);
+  if (!template) return;
+
+  state.editingTemplateId = templateId;
+  els.modalPlantillaTitle.textContent = "Editar plantilla";
+  els.templateCodigo.value = template.codigo || "";
+  els.templateMotivo.value = template.motivo || "";
+  els.templateTitulo.value = template.titulo || "";
+  els.templateTexto.value = template.texto || "";
+  openModal(els.modalPlantilla);
+
+  setTimeout(() => {
+    els.templateTitulo.focus();
+  }, 50);
+}
+
+async function handleSaveTemplate() {
+  const codigo = els.templateCodigo.value.trim();
+  const motivo = els.templateMotivo.value.trim();
+  const titulo = els.templateTitulo.value.trim();
+  const texto = els.templateTexto.value.trim();
+
+  if (!motivo) {
+    alert("Debes seleccionar un motivo de rechazo.");
+    els.templateMotivo.focus();
+    return;
+  }
+
+  if (!titulo) {
+    alert("Debes ingresar el título de la plantilla.");
+    els.templateTitulo.focus();
+    return;
+  }
+
+  if (!texto) {
+    alert("Debes ingresar el texto de la plantilla.");
+    els.templateTexto.focus();
+    return;
+  }
+
+  if (state.editingTemplateId) {
+    state.plantillas = state.plantillas.map((item) =>
+      item.id === state.editingTemplateId
+        ? { ...item, codigo, motivo, titulo, texto }
+        : item
+    );
+  } else {
+    state.plantillas.unshift({
+      id: createId(),
+      codigo,
+      motivo,
+      titulo,
+      texto
+    });
+  }
+
+  await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
+  closeTemplateModal();
+  renderAll();
+}
+
+function openFavoriteModal(templateId) {
+  if (state.favoritos.length >= MAX_FAVORITOS) {
+    alert(`Ya alcanzaste el máximo de ${MAX_FAVORITOS} favoritos.`);
+    return;
+  }
+
+  const template = state.plantillas.find((item) => item.id === templateId);
+  if (!template) return;
+
+  state.pendingFavoriteTemplateId = templateId;
+  els.favoritoNombre.value = template.titulo || "";
+  openModal(els.modalFavorito);
+
+  setTimeout(() => {
+    els.favoritoNombre.focus();
+    els.favoritoNombre.select();
+  }, 50);
+}
+
+async function handleSaveFavorite() {
+  const nombre = els.favoritoNombre.value.trim();
+
+  if (!nombre) {
+    alert("Debes escribir un nombre para el favorito.");
+    els.favoritoNombre.focus();
+    return;
+  }
+
+  const template = state.plantillas.find((item) => item.id === state.pendingFavoriteTemplateId);
+  if (!template) {
+    alert("No fue posible recuperar la plantilla para guardar el favorito.");
+    return;
+  }
+
+  const favorito = {
+    id: createId(),
+    templateId: template.id,
+    nombre,
+    texto: template.texto || "",
+    color: getRandomColor()
   };
 
-  await setPlantillas(plantillas);
-  clearForm();
-  await render();
+  state.favoritos.unshift(favorito);
+  state.favoritos = state.favoritos.slice(0, MAX_FAVORITOS);
 
-  showToast("Plantilla actualizada.", "Editar", 1000);
+  await setStorage(STORAGE_KEYS.FAVORITOS, state.favoritos);
+  closeFavoriteModal();
+  renderFavorites();
 }
 
-/* ============================
-   Copiar / Insertar
-============================ */
-
-async function copyDescripcion(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast("Descripción copiada.", "Copiar", 1000);
-  } catch (err) {
-    console.error(err);
-    showToast("No se pudo copiar. Intenta manualmente.", "Error", 1400);
-  }
+function closeTemplateModal() {
+  closeModal(els.modalPlantilla);
 }
 
-async function insertDescripcion(text) {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      showToast("No se encontró la pestaña activa.", "Error", 1400);
-      return;
-    }
-
-    // Inyectar content.js (por si aún no está)
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content.js"]
-    });
-
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "INSERT_TEXT",
-      text
-    });
-
-    if (!response?.ok) {
-      showToast("No se pudo insertar. Haz clic en un campo primero.", "Insertar", 1400);
-    } else {
-      showToast("Texto insertado.", "Insertar", 900);
-    }
-  } catch (err) {
-    console.error(err);
-    showToast("Fallo al insertar en la página.", "Error", 1400);
-  }
+function closeFavoriteModal() {
+  state.pendingFavoriteTemplateId = null;
+  closeModal(els.modalFavorito);
 }
 
-/* ============================
-   Import / Export
-============================ */
+function openModal(modalEl) {
+  modalEl.classList.remove("hidden");
+}
 
-function downloadTextFile(filename, text) {
-  const blob = new Blob([text], { type: "application/json" });
+function closeModal(modalEl) {
+  modalEl.classList.add("hidden");
+}
+
+function closeModalById(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add("hidden");
+}
+
+async function exportTemplatesAsJson() {
+  const data = JSON.stringify(state.plantillas, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = "fixit-plantillas.json";
+  document.body.appendChild(a);
   a.click();
+  a.remove();
 
   URL.revokeObjectURL(url);
 }
 
-async function exportJSON() {
-  const plantillas = await getPlantillas();
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    count: plantillas.length,
-    plantillas
-  };
+async function handleImportFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
 
-  const filename = `motivos_rechazo_${new Date().toISOString().slice(0, 10)}.json`;
-  downloadTextFile(filename, JSON.stringify(payload, null, 2));
-  showToast("Exportación lista.", "Exportar", 1000);
-}
-
-async function importJSONFile(file) {
-  let text = "";
   try {
-    text = await file.text();
-  } catch (err) {
-    console.error(err);
-    showToast("No se pudo leer el archivo.", "Error", 1400);
-    return;
-  }
+    const text = await file.text();
+    const parsed = JSON.parse(text);
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (err) {
-    console.error(err);
-    showToast("El archivo no es un JSON válido.", "Error", 1400);
-    return;
-  }
+    if (!Array.isArray(parsed)) {
+      throw new Error("El JSON debe contener un arreglo de plantillas.");
+    }
 
-  const incoming = Array.isArray(data) ? data : data.plantillas;
-  if (!Array.isArray(incoming)) {
-    showToast("El JSON no contiene una lista válida de plantillas.", "Error", 1400);
-    return;
-  }
-
-  // Compatibilidad: acepta "motivo" o "categoria"
-  const cleaned = incoming
-    .filter(p =>
-      p &&
-      p.codigo &&
-      (p.motivo || p.categoria) &&
-      p.titulo &&
-      typeof p.descripcion === "string"
-    )
-    .map(p => ({
-      id: p.id ? String(p.id) : uuid(),
-      codigo: String(p.codigo).trim(),
-      motivo: String(p.motivo ?? p.categoria).trim(),
-      titulo: String(p.titulo).trim(),
-      descripcion: String(p.descripcion),
-      activo: p.activo === undefined ? true : Boolean(p.activo)
+    const imported = sanitizeTemplates(parsed).map((item) => ({
+      ...item,
+      id: item.id || createId()
     }));
 
-  if (!cleaned.length) {
-    showToast("No se encontraron plantillas válidas en el JSON.", "Error", 1400);
-    return;
-  }
+    const merged = mergeTemplates(state.plantillas, imported);
+    state.plantillas = merged;
 
-  // Mezclar por ID (si existe, reemplaza)
-  const current = await getPlantillas();
-  const byId = new Map(current.map(p => [p.id, p]));
-  for (const p of cleaned) byId.set(p.id, p);
+    await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
+    renderAll();
 
-  const merged = Array.from(byId.values());
-  await setPlantillas(merged);
-
-  showToast(`Importadas: ${cleaned.length} plantillas.`, "Importar", 1200);
-  await render();
-}
-
-/* ============================
-   Render
-============================ */
-
-function buildItemHtml(p) {
-  const codigo = escapeHtml(p.codigo || "");
-  const motivo = escapeHtml(p.motivo || "");
-  const titulo = escapeHtml(p.titulo || "");
-  const descripcion = escapeHtml(p.descripcion || "");
-
-  const estadoPill = p.activo
-    ? `<span class="pill ok">ACTIVO</span>`
-    : `<span class="pill off">INACTIVO</span>`;
-
-  return `
-    <div class="item-head">
-      <div>
-        <div class="item-code">
-          <span>${codigo}</span>
-          ${estadoPill}
-        </div>
-        <div class="item-title">${titulo}</div>
-      </div>
-    </div>
-
-    <div class="item-sub">
-      <div class="kv">
-        <span class="k">Motivo de Rechazo</span>
-        <span class="v">${motivo}</span>
-      </div>
-      <div class="kv">
-        <span class="k">Pegable</span>
-        <span class="v">Copiar o Insertar</span>
-      </div>
-    </div>
-
-    <div class="desc">${descripcion}</div>
-
-    <div class="row-actions">
-      <button data-id="${p.id}" class="btn small secondary copy" type="button">Copiar</button>
-      <button data-id="${p.id}" class="btn small primary insert" type="button">Insertar</button>
-      <button data-id="${p.id}" class="btn small secondary edit" type="button">Editar</button>
-      <button data-id="${p.id}" class="btn small warning toggle" type="button">${p.activo ? "Desactivar" : "Activar"}</button>
-      <button data-id="${p.id}" class="btn small danger delete" type="button">Eliminar</button>
-    </div>
-  `;
-}
-
-async function render() {
-  const plantillas = await getPlantillas();
-
-  // filtros
-  let filtered = [...plantillas];
-
-  if (currentActivoFilter === "activos") {
-    filtered = filtered.filter(p => p.activo);
-  }
-
-  if (currentMotivoFilter) {
-    filtered = filtered.filter(p => p.motivo === currentMotivoFilter);
-  }
-
-  if (currentSearch) {
-    const q = currentSearch.toLowerCase();
-    filtered = filtered.filter(p =>
-      (p.codigo || "").toLowerCase().includes(q) ||
-      (p.motivo || "").toLowerCase().includes(q) ||
-      (p.titulo || "").toLowerCase().includes(q) ||
-      (p.descripcion || "").toLowerCase().includes(q)
-    );
-  }
-
-  // contador
-  const countEl = document.getElementById("count");
-  if (countEl) countEl.textContent = `${filtered.length}`;
-
-  // lista
-  const list = document.getElementById("list");
-  if (!list) return;
-
-  list.innerHTML = "";
-
-  if (!filtered.length) {
-    list.innerHTML = `<p class="muted">No hay resultados.</p>`;
-    return;
-  }
-
-  for (const p of filtered) {
-    const div = document.createElement("div");
-    div.className = "item" + (p.activo ? "" : " inactive");
-    div.innerHTML = buildItemHtml(p);
-    list.appendChild(div);
+    alert(`Importación completada. Total de plantillas: ${state.plantillas.length}`);
+  } catch (error) {
+    console.error(error);
+    alert(`No fue posible importar el archivo JSON.\n${error.message}`);
+  } finally {
+    event.target.value = "";
   }
 }
 
-/* ============================
-   Listeners (inicialización)
-============================ */
+function mergeTemplates(current, incoming) {
+  const map = new Map();
 
-function init() {
-  // Botones del formulario
-  document.getElementById("btn-save")?.addEventListener("click", savePlantilla);
-  document.getElementById("btn-update")?.addEventListener("click", updatePlantilla);
-  document.getElementById("btn-cancel")?.addEventListener("click", clearForm);
+  [...current, ...incoming].forEach((item) => {
+    const codigo = (item.codigo || "").trim().toLowerCase();
+    const motivo = (item.motivo || "").trim().toLowerCase();
+    const titulo = (item.titulo || "").trim().toLowerCase();
+    const texto = (item.texto || "").trim().toLowerCase();
 
-  // Export
-  document.getElementById("btn-export")?.addEventListener("click", exportJSON);
+    const uniqueKey = `${codigo}__${motivo}__${titulo}__${texto}`;
 
-  // Import (FIX: handler sin async para preservar el "user gesture")
-  const btnImport = document.getElementById("btn-import");
-  const fileImport = document.getElementById("file-import");
+    if (!map.has(uniqueKey)) {
+      map.set(uniqueKey, {
+        id: item.id || createId(),
+        codigo: item.codigo || "",
+        motivo: item.motivo || "",
+        titulo: item.titulo || "",
+        texto: item.texto || ""
+      });
+    }
+  });
 
-  if (btnImport && fileImport) {
-    btnImport.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+  return Array.from(map.values());
+}
 
-      try {
-        // permitir re-importar el mismo archivo
-        fileImport.value = "";
-        fileImport.focus();
+function sanitizeTemplates(arr) {
+  return arr
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: item.id || createId(),
+      codigo: safeString(item.codigo),
+      motivo: safeString(item.motivo),
+      titulo: safeString(item.titulo),
+      texto: safeString(item.texto)
+    }));
+}
 
-        // abrir selector
-        fileImport.click();
-      } catch (err) {
-        console.error("Error abriendo selector de archivo:", err);
-        showToast("No se pudo abrir el selector de archivo.", "Error", 1500);
-      }
+function sanitizeFavorites(arr) {
+  return arr
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: item.id || createId(),
+      templateId: item.templateId || null,
+      nombre: safeString(item.nombre),
+      texto: safeString(item.texto),
+      color: item.color || getRandomColor()
+    }))
+    .slice(0, MAX_FAVORITOS);
+}
+
+function safeString(value) {
+  return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function normalizeText(value) {
+  return safeString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getRandomColor() {
+  const palette = [
+    "linear-gradient(135deg, #ef4444, #f97316)",
+    "linear-gradient(135deg, #eab308, #f59e0b)",
+    "linear-gradient(135deg, #22c55e, #14b8a6)",
+    "linear-gradient(135deg, #06b6d4, #3b82f6)",
+    "linear-gradient(135deg, #3b82f6, #6366f1)",
+    "linear-gradient(135deg, #8b5cf6, #a855f7)",
+    "linear-gradient(135deg, #ec4899, #f43f5e)",
+    "linear-gradient(135deg, #14b8a6, #10b981)",
+    "linear-gradient(135deg, #f97316, #ef4444)",
+    "linear-gradient(135deg, #6366f1, #8b5cf6)"
+  ];
+
+  return palette[Math.floor(Math.random() * palette.length)];
+}
+
+function createId() {
+  return `id_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
+
+function showToastFallback(message) {
+  console.log(message);
+}
+
+function getStorage(key) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([key], (result) => {
+      resolve(result[key]);
     });
-
-    fileImport.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      await importJSONFile(file);
-      e.target.value = "";
-    });
-  } else {
-    console.error("No se encontró btn-import o file-import en el DOM.");
-  }
-
-  // Búsqueda / filtros
-  document.getElementById("search")?.addEventListener("input", (e) => {
-    currentSearch = e.target.value.trim();
-    render();
   });
-
-  document.getElementById("filter-activo")?.addEventListener("change", (e) => {
-    currentActivoFilter = e.target.value;
-    render();
-  });
-
-  document.getElementById("filter-motivo")?.addEventListener("change", (e) => {
-    currentMotivoFilter = e.target.value;
-    render();
-  });
-
-  // Delegación de clicks en items
-  document.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-
-    const id = btn.dataset.id;
-    if (!id) return;
-
-    const plantillas = await getPlantillas();
-    const index = plantillas.findIndex(p => p.id === id);
-    if (index === -1) return;
-
-    if (btn.classList.contains("edit")) {
-      fillForm(plantillas[index]);
-      setEditMode(true);
-      return;
-    }
-
-    if (btn.classList.contains("copy")) {
-      await copyDescripcion(plantillas[index].descripcion || "");
-      return;
-    }
-
-    if (btn.classList.contains("insert")) {
-      await insertDescripcion(plantillas[index].descripcion || "");
-      return;
-    }
-
-    if (btn.classList.contains("toggle")) {
-      plantillas[index].activo = !plantillas[index].activo;
-      await setPlantillas(plantillas);
-      await render();
-      showToast(plantillas[index].activo ? "Plantilla activada." : "Plantilla desactivada.", "Estado", 1000);
-      return;
-    }
-
-    if (btn.classList.contains("delete")) {
-      const ok = confirm("¿Eliminar esta plantilla?");
-      if (!ok) return;
-
-      plantillas.splice(index, 1);
-      await setPlantillas(plantillas);
-      await render();
-      showToast("Plantilla eliminada.", "Eliminar", 1000);
-    }
-  });
-
-  // Render inicial
-  render();
 }
 
-// Arranque seguro
-document.addEventListener("DOMContentLoaded", () => {
-  init();
-
-  // Autofocus en el buscador al abrir la extensión
-  setTimeout(() => {
-    const search = document.getElementById("search");
-    if (search) {
-      search.focus();
-      search.select(); // opcional: selecciona texto si existe
-    }
-  }, 120);
-});
+function setStorage(key, value) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [key]: value }, () => resolve());
+  });
+}

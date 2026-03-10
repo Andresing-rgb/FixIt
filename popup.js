@@ -1,9 +1,15 @@
 const EXT_API = (() => {
-  if (typeof globalThis.chrome !== "undefined" && globalThis.chrome?.storage?.local) {
+  if (
+    typeof globalThis.chrome !== "undefined" &&
+    globalThis.chrome?.storage?.local
+  ) {
     return globalThis.chrome;
   }
 
-  if (typeof globalThis.browser !== "undefined" && globalThis.browser?.storage?.local) {
+  if (
+    typeof globalThis.browser !== "undefined" &&
+    globalThis.browser?.storage?.local
+  ) {
     return globalThis.browser;
   }
 
@@ -12,11 +18,28 @@ const EXT_API = (() => {
 
 const STORAGE_KEYS = {
   PLANTILLAS: "fixit_plantillas",
-  FAVORITOS: "fixit_favoritos"
+  FAVORITOS: "fixit_favoritos",
 };
 
 const MAX_FAVORITOS = 15;
 const MAX_FAVORITO_NOMBRE = 15;
+
+const MOTIVOS_PREDEFINIDOS = [
+  "DATO ILEGIBLE",
+  "DOCUMENTO AUTOMATICO",
+  "DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECANICA",
+  "DOCUMENTO EXPEDIDO EN UN PAIS DIFERENTE A COLOMBIA",
+  "DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCION",
+  "DOCUMENTO MAL CLASIFICADO",
+  "DOCUMENTO MAL DIGITALIZADO",
+  "DOCUMENTO NO VALIDO PARA FINES DE APOSTILLA Y/O LEGALIZACION",
+  "ERROR PAIS DESTINO",
+  "FALTA FIRMA DE SERVIDOR PUBLICO",
+  "INCONSISTENCIA EN DOCUMENTO",
+  "LA AUTENTICACION DE COPIA ANTE NOTARIO PUBLICO NO ES VALIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO",
+  "DOCUMENTO NO SE ENCUENTRA VIGENTE",
+  "OTROS RECHAZOS",
+];
 
 let state = {
   plantillas: [],
@@ -24,7 +47,7 @@ let state = {
   filtroBusqueda: "",
   filtroMotivo: "",
   editingTemplateId: null,
-  pendingFavoriteTemplateId: null
+  pendingFavoriteTemplateId: null,
 };
 
 const els = {};
@@ -34,6 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
   await initData();
   renderAll();
+  focusSearchInput();
 });
 
 function cacheElements() {
@@ -124,14 +148,46 @@ async function initData() {
 }
 
 function renderAll() {
+  renderMotivoOptions();
   renderMotivoFilter();
   renderFavorites();
   renderTemplates();
 }
 
+function renderMotivoOptions() {
+  const motivosDinamicos = state.plantillas
+    .map((p) => safeString(p.motivo).trim())
+    .filter(Boolean);
+
+  const motivos = [
+    ...new Set([...MOTIVOS_PREDEFINIDOS, ...motivosDinamicos]),
+  ].sort((a, b) => a.localeCompare(b, "es"));
+
+  const selectedValue = els.templateMotivo.value || "";
+
+  els.templateMotivo.innerHTML = `<option value="">Seleccione un motivo</option>`;
+
+  motivos.forEach((motivo) => {
+    const option = document.createElement("option");
+    option.value = motivo;
+    option.textContent = motivo;
+
+    if (motivo === selectedValue) {
+      option.selected = true;
+    }
+
+    els.templateMotivo.appendChild(option);
+  });
+}
+
 function renderMotivoFilter() {
-  const motivos = [...new Set(state.plantillas.map((p) => p.motivo.trim()).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "es"));
+  const motivosDinamicos = state.plantillas
+    .map((p) => safeString(p.motivo).trim())
+    .filter(Boolean);
+
+  const motivos = [
+    ...new Set([...MOTIVOS_PREDEFINIDOS, ...motivosDinamicos]),
+  ].sort((a, b) => a.localeCompare(b, "es"));
 
   const current = state.filtroMotivo;
   els.motivoFilter.innerHTML = `<option value="">Todos los motivos de rechazo</option>`;
@@ -210,10 +266,14 @@ function renderTemplates() {
   filtered.forEach((template) => {
     const fragment = els.plantillaCardTemplate.content.cloneNode(true);
 
-    fragment.querySelector(".plantilla-codigo").textContent = template.codigo || "Sin código";
-    fragment.querySelector(".plantilla-motivo").textContent = template.motivo || "Sin motivo";
-    fragment.querySelector(".plantilla-titulo").textContent = template.titulo || "Sin título";
-    fragment.querySelector(".plantilla-texto").textContent = template.texto || "";
+    fragment.querySelector(".plantilla-codigo").textContent =
+      template.codigo || "Sin código";
+    fragment.querySelector(".plantilla-motivo").textContent =
+      template.motivo || "Sin motivo";
+    fragment.querySelector(".plantilla-titulo").textContent =
+      template.titulo || "Sin título";
+    fragment.querySelector(".plantilla-texto").textContent =
+      template.texto || "";
 
     fragment.querySelector(".btn-copy").addEventListener("click", async () => {
       await copyToClipboard(template.texto || "");
@@ -228,20 +288,28 @@ function renderTemplates() {
       openEditTemplateModal(template.id);
     });
 
-    fragment.querySelector(".btn-delete").addEventListener("click", async () => {
-      const ok = confirm(`¿Eliminar la plantilla "${template.titulo}"?`);
-      if (!ok) return;
+    fragment
+      .querySelector(".btn-delete")
+      .addEventListener("click", async () => {
+        const ok = confirm(`¿Eliminar la plantilla "${template.titulo}"?`);
+        if (!ok) return;
 
-      state.plantillas = state.plantillas.filter((item) => item.id !== template.id);
-      await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
+        state.plantillas = state.plantillas.filter(
+          (item) => item.id !== template.id,
+        );
+        await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
 
-      if (state.filtroMotivo && !state.plantillas.some((p) => p.motivo === state.filtroMotivo)) {
-        state.filtroMotivo = "";
-        els.motivoFilter.value = "";
-      }
+        if (
+          state.filtroMotivo &&
+          !state.plantillas.some((p) => p.motivo === state.filtroMotivo)
+        ) {
+          state.filtroMotivo = "";
+          els.motivoFilter.value = "";
+        }
 
-      renderAll();
-    });
+        renderAll();
+        focusSearchInput();
+      });
 
     els.listaPlantillas.appendChild(fragment);
   });
@@ -249,7 +317,8 @@ function renderTemplates() {
 
 function getFilteredTemplates() {
   return state.plantillas.filter((template) => {
-    const matchesMotivo = !state.filtroMotivo || template.motivo === state.filtroMotivo;
+    const matchesMotivo =
+      !state.filtroMotivo || template.motivo === state.filtroMotivo;
 
     const codigo = normalizeText(template.codigo);
     const titulo = normalizeText(template.titulo);
@@ -322,7 +391,7 @@ async function handleSaveTemplate() {
     state.plantillas = state.plantillas.map((item) =>
       item.id === state.editingTemplateId
         ? { ...item, codigo, motivo, titulo, texto }
-        : item
+        : item,
     );
   } else {
     state.plantillas.unshift({
@@ -330,13 +399,14 @@ async function handleSaveTemplate() {
       codigo,
       motivo,
       titulo,
-      texto
+      texto,
     });
   }
 
   await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
   closeTemplateModal();
   renderAll();
+  focusSearchInput();
 }
 
 function openFavoriteModal(templateId) {
@@ -368,7 +438,9 @@ async function handleSaveFavorite() {
     return;
   }
 
-  const template = state.plantillas.find((item) => item.id === state.pendingFavoriteTemplateId);
+  const template = state.plantillas.find(
+    (item) => item.id === state.pendingFavoriteTemplateId,
+  );
   if (!template) {
     alert("No fue posible recuperar la plantilla para guardar el favorito.");
     return;
@@ -379,7 +451,7 @@ async function handleSaveFavorite() {
     templateId: template.id,
     nombre,
     texto: template.texto || "",
-    color: getRandomColor()
+    color: getRandomColor(),
   };
 
   state.favoritos.unshift(favorito);
@@ -388,15 +460,18 @@ async function handleSaveFavorite() {
   await setStorage(STORAGE_KEYS.FAVORITOS, state.favoritos);
   closeFavoriteModal();
   renderFavorites();
+  focusSearchInput();
 }
 
 function closeTemplateModal() {
   closeModal(els.modalPlantilla);
+  focusSearchInput();
 }
 
 function closeFavoriteModal() {
   state.pendingFavoriteTemplateId = null;
   closeModal(els.modalFavorito);
+  focusSearchInput();
 }
 
 function openModal(modalEl) {
@@ -405,6 +480,18 @@ function openModal(modalEl) {
 
 function closeModal(modalEl) {
   modalEl.classList.add("hidden");
+}
+
+function focusSearchInput() {
+  setTimeout(() => {
+    if (!els.searchInput) return;
+    if (!els.modalPlantilla.classList.contains("hidden")) return;
+    if (!els.modalFavorito.classList.contains("hidden")) return;
+
+    els.searchInput.focus();
+    const end = els.searchInput.value.length;
+    els.searchInput.setSelectionRange(end, end);
+  }, 80);
 }
 
 async function exportTemplatesAsJson() {
@@ -436,7 +523,7 @@ async function handleImportFile(event) {
 
     const imported = sanitizeTemplates(parsed).map((item) => ({
       ...item,
-      id: item.id || createId()
+      id: item.id || createId(),
     }));
 
     const merged = mergeTemplates(state.plantillas, imported);
@@ -444,8 +531,11 @@ async function handleImportFile(event) {
 
     await setStorage(STORAGE_KEYS.PLANTILLAS, state.plantillas);
     renderAll();
+    focusSearchInput();
 
-    alert(`Importación completada. Total de plantillas: ${state.plantillas.length}`);
+    alert(
+      `Importación completada. Total de plantillas: ${state.plantillas.length}`,
+    );
   } catch (error) {
     console.error(error);
     alert(`No fue posible importar el archivo JSON.\n${error.message}`);
@@ -471,7 +561,7 @@ function mergeTemplates(current, incoming) {
         codigo: item.codigo || "",
         motivo: item.motivo || "",
         titulo: item.titulo || "",
-        texto: item.texto || ""
+        texto: item.texto || "",
       });
     }
   });
@@ -487,7 +577,7 @@ function sanitizeTemplates(arr) {
       codigo: safeString(item.codigo),
       motivo: safeString(item.motivo),
       titulo: safeString(item.titulo),
-      texto: safeString(item.texto)
+      texto: safeString(item.texto),
     }));
 }
 
@@ -499,7 +589,7 @@ function sanitizeFavorites(arr) {
       templateId: item.templateId || null,
       nombre: limitFavoriteName(safeString(item.nombre)),
       texto: safeString(item.texto),
-      color: item.color || getRandomColor()
+      color: item.color || getRandomColor(),
     }))
     .slice(0, MAX_FAVORITOS);
 }
@@ -541,7 +631,7 @@ function getRandomColor() {
     "linear-gradient(135deg, #8b5cf6, #60a5fa)",
     "linear-gradient(135deg, #f97316, #ef4444)",
     "linear-gradient(135deg, #14b8a6, #10b981)",
-    "linear-gradient(135deg, #f43f5e, #fb7185)"
+    "linear-gradient(135deg, #f43f5e, #fb7185)",
   ];
 
   return palette[Math.floor(Math.random() * palette.length)];

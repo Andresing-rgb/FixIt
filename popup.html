@@ -1,173 +1,181 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FixIt</title>
-  <link rel="stylesheet" href="popup.css" />
-</head>
-<body>
-  <div class="app">
-    <header class="topbar">
-      <h1 class="app-title">FixIt</h1>
-      <p class="app-subtitle">Gestión de plantillas y favoritos</p>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FixIt</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <h1 class="app-title">FixIt</h1>
+        <p class="app-subtitle">Gestión de plantillas y favoritos</p>
+      </header>
 
-    <section class="toolbar">
-      <div class="toolbar-row toolbar-row-2">
-        <input
-          type="text"
-          id="searchInput"
-          class="input"
-          placeholder="Buscar (código, título)"
-          autocomplete="off"
-        />
-
-        <select id="motivoFilter" class="select">
-          <option value="">Todos los motivos de rechazo</option>
-        </select>
-      </div>
-
-      <div class="toolbar-row toolbar-actions">
-        <button id="btnNuevaPlantilla" class="btn btn-primary">Nueva plantilla</button>
-        <button id="btnExportar" class="btn">Exportar</button>
-        <button id="btnImportar" class="btn">Importar</button>
-        <input type="file" id="fileImport" accept=".json,application/json" hidden />
-      </div>
-    </section>
-
-    <section class="favorites-section">
-      <div class="section-head">
-        <h2>Favoritos</h2>
-        <span id="favoritosCount" class="counter">0/15</span>
-      </div>
-      <div id="favoritosContainer" class="favoritos-container"></div>
-      <p class="helper-text">
-        Clic en favorito: copia el texto. Clic derecho: elimina el favorito.
-      </p>
-    </section>
-
-    <section class="list-section">
-      <div class="section-head">
-        <h2>Plantillas</h2>
-        <span id="plantillasCount" class="counter">0</span>
-      </div>
-      <div id="listaPlantillas" class="lista-plantillas"></div>
-      <div id="emptyState" class="empty-state hidden">
-        No hay resultados para la búsqueda actual.
-      </div>
-    </section>
-  </div>
-
-  <!-- Modal Plantilla -->
-  <div id="modalPlantilla" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content modal-large">
-      <div class="modal-header">
-        <h3 id="modalPlantillaTitle">Nueva plantilla</h3>
-        <button class="icon-btn" type="button" aria-label="Cerrar">✕</button>
-      </div>
-
-      <div class="modal-body modal-scroll">
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="templateCodigo">Código</label>
-            <input type="text" id="templateCodigo" class="input" placeholder="Ej: R-FIR-02" />
-          </div>
-
-          <div class="form-group">
-            <label for="templateMotivo">Motivo de rechazo</label>
-            <select id="templateMotivo" class="select">
-              <option value="">Seleccione un motivo</option>
-              <option value="DATO ILEGIBLE">DATO ILEGIBLE</option>
-              <option value="DOCUMENTO AUTOMATICO">DOCUMENTO AUTOMATICO</option>
-              <option value="DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECANICA">DOCUMENTO EXPEDIDO CON FIRMA DIGITAL / MECANICA</option>
-              <option value="DOCUMENTO EXPEDIDO EN UN PAIS DIFERENTE A COLOMBIA">DOCUMENTO EXPEDIDO EN UN PAIS DIFERENTE A COLOMBIA</option>
-              <option value="DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCION">DOCUMENTO NO CUMPLE CON REQUISITOS PARA SER TRAMITADO POR ESTA OPCION</option>
-              <option value="DOCUMENTO MAL CLASIFICADO">DOCUMENTO MAL CLASIFICADO</option>
-              <option value="DOCUMENTO MAL DIGITALIZADO">DOCUMENTO MAL DIGITALIZADO</option>
-              <option value="DOCUMENTO NO VALIDO PARA FINES DE APOSTILLA Y/O LEGALIZACION">DOCUMENTO NO VALIDO PARA FINES DE APOSTILLA Y/O LEGALIZACION</option>
-              <option value="ERROR PAIS DESTINO">ERROR PAIS DESTINO</option>
-              <option value="FALTA FIRMA DE SERVIDOR PUBLICO">FALTA FIRMA DE SERVIDOR PUBLICO</option>
-              <option value="INCONSISTENCIA EN DOCUMENTO">INCONSISTENCIA EN DOCUMENTO</option>
-              <option value="LA AUTENTICACION DE COPIA ANTE NOTARIO PUBLICO NO ES VALIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO">LA AUTENTICACION DE COPIA ANTE NOTARIO PUBLICO NO ES VALIDA PARA APOSTILLAR O LEGALIZAR ESTE DOCUMENTO</option>
-              <option value="DOCUMENTO NO SE ENCUENTRA VIGENTE">DOCUMENTO NO SE ENCUENTRA VIGENTE</option>
-            </select>
-          </div>
-
-          <div class="form-group form-group-full">
-            <label for="templateTitulo">Título</label>
-            <input type="text" id="templateTitulo" class="input" placeholder="Título de la plantilla" />
-          </div>
-
-          <div class="form-group form-group-full">
-            <label for="templateTexto">Texto</label>
-            <textarea
-              id="templateTexto"
-              class="textarea"
-              rows="10"
-              placeholder="Escribe aquí el texto completo de la plantilla..."
-            ></textarea>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer sticky-footer">
-        <button id="btnCancelarPlantilla" class="btn">Cancelar</button>
-        <button id="btnGuardarPlantilla" class="btn btn-primary">Guardar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Favorito -->
-  <div id="modalFavorito" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Guardar favorito</h3>
-        <button class="icon-btn" type="button" aria-label="Cerrar">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="favoritoNombre">Nombre del favorito</label>
+      <section class="toolbar">
+        <div class="toolbar-row toolbar-row-2">
           <input
             type="text"
-            id="favoritoNombre"
+            id="searchInput"
             class="input"
-            maxlength="15"
-            placeholder="Máximo 15 caracteres"
+            placeholder="Buscar (código, título)"
+            autocomplete="off"
+          />
+
+          <select id="motivoFilter" class="select">
+            <option value="">Todos los motivos de rechazo</option>
+          </select>
+        </div>
+
+        <div class="toolbar-row toolbar-actions">
+          <button id="btnNuevaPlantilla" class="btn btn-primary">
+            Nueva plantilla
+          </button>
+          <button id="btnExportar" class="btn">Exportar</button>
+          <button id="btnImportar" class="btn">Importar</button>
+          <input
+            type="file"
+            id="fileImport"
+            accept=".json,application/json"
+            hidden
           />
         </div>
-      </div>
+      </section>
 
-      <div class="modal-footer">
-        <button id="btnCancelarFavorito" class="btn">Cancelar</button>
-        <button id="btnGuardarFavorito" class="btn btn-primary">Guardar</button>
+      <section class="favorites-section">
+        <div class="section-head">
+          <h2>Favoritos</h2>
+          <span id="favoritosCount" class="counter">0/15</span>
+        </div>
+        <div id="favoritosContainer" class="favoritos-container"></div>
+        <p class="helper-text">
+          Clic en favorito: copia el texto. Clic derecho: elimina el favorito.
+        </p>
+      </section>
+
+      <section class="list-section">
+        <div class="section-head">
+          <h2>Plantillas</h2>
+          <span id="plantillasCount" class="counter">0</span>
+        </div>
+        <div id="listaPlantillas" class="lista-plantillas"></div>
+        <div id="emptyState" class="empty-state hidden">
+          No hay resultados para la búsqueda actual.
+        </div>
+      </section>
+    </div>
+
+    <!-- Modal Plantilla -->
+    <div id="modalPlantilla" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 id="modalPlantillaTitle">Nueva plantilla</h3>
+          <button class="icon-btn" type="button" aria-label="Cerrar">✕</button>
+        </div>
+
+        <div class="modal-body modal-scroll">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="templateCodigo">Código</label>
+              <input
+                type="text"
+                id="templateCodigo"
+                class="input"
+                placeholder="Ej: R-FIR-02"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="templateMotivo">Motivo de rechazo</label>
+              <select id="templateMotivo" class="select">
+                <option value="">Seleccione un motivo</option>
+              </select>
+            </div>
+
+            <div class="form-group form-group-full">
+              <label for="templateTitulo">Título</label>
+              <input
+                type="text"
+                id="templateTitulo"
+                class="input"
+                placeholder="Título de la plantilla"
+              />
+            </div>
+
+            <div class="form-group form-group-full">
+              <label for="templateTexto">Texto</label>
+              <textarea
+                id="templateTexto"
+                class="textarea"
+                rows="10"
+                placeholder="Escribe aquí el texto completo de la plantilla..."
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer sticky-footer">
+          <button id="btnCancelarPlantilla" class="btn">Cancelar</button>
+          <button id="btnGuardarPlantilla" class="btn btn-primary">
+            Guardar
+          </button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <template id="plantillaCardTemplate">
-    <article class="plantilla-card">
-      <div class="plantilla-card-header">
-        <div class="plantilla-meta">
-          <span class="badge badge-code plantilla-codigo"></span>
-          <span class="badge badge-motivo plantilla-motivo"></span>
+    <!-- Modal Favorito -->
+    <div id="modalFavorito" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Guardar favorito</h3>
+          <button class="icon-btn" type="button" aria-label="Cerrar">✕</button>
         </div>
-        <div class="plantilla-actions">
-          <button class="btn btn-sm btn-copy">Copiar</button>
-          <button class="btn btn-sm btn-fav">Favorito</button>
-          <button class="btn btn-sm btn-edit">Editar</button>
-          <button class="btn btn-sm btn-danger btn-delete">Eliminar</button>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="favoritoNombre">Nombre del favorito</label>
+            <input
+              type="text"
+              id="favoritoNombre"
+              class="input"
+              maxlength="15"
+              placeholder="Máximo 15 caracteres"
+            />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btnCancelarFavorito" class="btn">Cancelar</button>
+          <button id="btnGuardarFavorito" class="btn btn-primary">
+            Guardar
+          </button>
         </div>
       </div>
+    </div>
 
-      <h3 class="plantilla-titulo"></h3>
-      <p class="plantilla-texto"></p>
-    </article>
-  </template>
+    <template id="plantillaCardTemplate">
+      <article class="plantilla-card">
+        <div class="plantilla-card-header">
+          <div class="plantilla-meta">
+            <span class="badge badge-code plantilla-codigo"></span>
+            <span class="badge badge-motivo plantilla-motivo"></span>
+          </div>
+          <div class="plantilla-actions">
+            <button class="btn btn-sm btn-copy">Copiar</button>
+            <button class="btn btn-sm btn-fav">Favorito</button>
+            <button class="btn btn-sm btn-edit">Editar</button>
+            <button class="btn btn-sm btn-danger btn-delete">Eliminar</button>
+          </div>
+        </div>
 
-  <script src="popup.js"></script>
-</body>
+        <h3 class="plantilla-titulo"></h3>
+        <p class="plantilla-texto"></p>
+      </article>
+    </template>
+
+    <script src="popup.js"></script>
+  </body>
 </html>

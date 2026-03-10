@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "FixIt",
-  "version": "2.0.0",
-  "description": "Gestión rápida de motivos de rechazo y plantillas.",
+  "version": "2.1.0",
+  "description": "Gestión rápida de motivos de rechazo, plantillas y favoritos.",
   "icons": {
+    "16": "icons/icon17.png",
     "17": "icons/icon17.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
@@ -12,15 +13,15 @@
   },
   "action": {
     "default_popup": "popup.html",
+    "default_title": "FixIt",
     "default_icon": {
       "16": "icons/icon17.png",
       "32": "icons/icon32.png",
-      "48": "icons/icon48.png"
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "permissions": [
-    "storage",
-    "activeTab",
-    "scripting"
+    "storage"
   ]
 }

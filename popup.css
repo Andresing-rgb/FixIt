@@ -157,6 +157,7 @@ body {
   font-size: 13px;
   cursor: pointer;
   transition: 0.18s ease;
+  font-weight: 700;
 }
 
 .btn:hover {
@@ -169,7 +170,6 @@ body {
   background: var(--primary);
   border-color: var(--primary);
   color: #282A36;
-  font-weight: 700;
 }
 
 .btn-primary:hover {
@@ -187,6 +187,7 @@ body {
 .btn-danger:hover {
   background: var(--danger-hover);
   border-color: var(--danger-hover);
+  color: #fff;
 }
 
 .btn-sm {
@@ -195,19 +196,41 @@ body {
   border-radius: 10px;
 }
 
-.btn-copy:hover {
-  border-color: var(--info);
-  color: var(--info);
+/* Botones de acciones de plantilla */
+.btn-copy {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: #282A36;
 }
 
-.btn-fav:hover {
-  border-color: var(--warning);
-  color: var(--warning);
+.btn-copy:hover {
+  background: #ffc883;
+  border-color: #ffc883;
+  color: #282A36;
+}
+
+.btn-edit {
+  background: var(--info);
+  border-color: var(--info);
+  color: #282A36;
 }
 
 .btn-edit:hover {
-  border-color: var(--success);
-  color: var(--success);
+  background: #a6f0ff;
+  border-color: #a6f0ff;
+  color: #282A36;
+}
+
+.btn-fav {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #282A36;
+}
+
+.btn-fav:hover {
+  background: #f2f2f2;
+  border-color: #f2f2f2;
+  color: #282A36;
 }
 
 .icon-btn {
@@ -224,13 +247,16 @@ body {
 }
 
 .favoritos-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
   min-height: 40px;
+  align-items: stretch;
 }
 
 .favorito-chip {
+  width: 100%;
+  min-height: 40px;
   border: 0;
   color: #282A36;
   border-radius: 999px;
@@ -238,11 +264,12 @@ body {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  transition: 0.18s ease;
 }
 
 .favorito-chip:hover {
@@ -276,9 +303,9 @@ body {
 
 .plantilla-card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
@@ -290,9 +317,34 @@ body {
 
 .plantilla-actions {
   display: flex;
+  width: 100%;
   gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.plantilla-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.plantilla-actions .btn-copy {
+  order: 1;
+}
+
+.plantilla-actions .btn-edit {
+  order: 2;
+}
+
+.plantilla-actions .btn-fav {
+  order: 3;
+}
+
+.plantilla-actions .btn-delete {
+  order: 4;
 }
 
 .badge {
@@ -318,8 +370,8 @@ body {
 
 .badge-motivo {
   background: rgba(189, 147, 249, 0.14);
-  color: var(--primary);
-  border-color: rgba(189, 147, 249, 0.35);
+  color: var(--success);
+  border-color: rgba(80, 250, 123, 0.35);
 }
 
 .plantilla-titulo {
@@ -466,12 +518,12 @@ body {
     display: grid;
   }
 
-  .plantilla-card-header {
-    flex-direction: column;
-  }
-
   .plantilla-actions {
     width: 100%;
-    justify-content: flex-start;
+    gap: 6px;
   }
+}
+
+.favoritos-container > .helper-text {
+  grid-column: 1 / -1;
 }

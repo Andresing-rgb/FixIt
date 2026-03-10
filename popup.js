@@ -1,9 +1,22 @@
+const EXT_API = (() => {
+  if (typeof globalThis.chrome !== "undefined" && globalThis.chrome?.storage?.local) {
+    return globalThis.chrome;
+  }
+
+  if (typeof globalThis.browser !== "undefined" && globalThis.browser?.storage?.local) {
+    return globalThis.browser;
+  }
+
+  throw new Error("No se encontró una API de extensiones compatible.");
+})();
+
 const STORAGE_KEYS = {
   PLANTILLAS: "fixit_plantillas",
   FAVORITOS: "fixit_favoritos"
 };
 
 const MAX_FAVORITOS = 15;
+const MAX_FAVORITO_NOMBRE = 15;
 
 let state = {
   plantillas: [],
@@ -162,13 +175,13 @@ function renderFavorites() {
 
     btn.addEventListener("contextmenu", async (e) => {
       e.preventDefault();
-      await removeFavoriteById(fav.id, fav.nombre);
+      await removeFavoriteById(fav.id);
     });
 
     btn.addEventListener("mousedown", async (e) => {
       if (e.button === 2) {
         e.preventDefault();
-        await removeFavoriteById(fav.id, fav.nombre);
+        await removeFavoriteById(fav.id);
       }
     });
 
@@ -176,10 +189,7 @@ function renderFavorites() {
   });
 }
 
-async function removeFavoriteById(id, nombre = "este favorito") {
-  const ok = confirm(`¿Deseas eliminar el favorito "${nombre}"?`);
-  if (!ok) return;
-
+async function removeFavoriteById(id) {
   state.favoritos = state.favoritos.filter((item) => item.id !== id);
   await setStorage(STORAGE_KEYS.FAVORITOS, state.favoritos);
   renderFavorites();
@@ -239,8 +249,7 @@ function renderTemplates() {
 
 function getFilteredTemplates() {
   return state.plantillas.filter((template) => {
-    const matchesMotivo =
-      !state.filtroMotivo || template.motivo === state.filtroMotivo;
+    const matchesMotivo = !state.filtroMotivo || template.motivo === state.filtroMotivo;
 
     const codigo = normalizeText(template.codigo);
     const titulo = normalizeText(template.titulo);
@@ -340,7 +349,7 @@ function openFavoriteModal(templateId) {
   if (!template) return;
 
   state.pendingFavoriteTemplateId = templateId;
-  els.favoritoNombre.value = template.titulo || "";
+  els.favoritoNombre.value = limitFavoriteName(template.titulo || "");
   openModal(els.modalFavorito);
 
   setTimeout(() => {
@@ -350,7 +359,8 @@ function openFavoriteModal(templateId) {
 }
 
 async function handleSaveFavorite() {
-  const nombre = els.favoritoNombre.value.trim();
+  const nombre = limitFavoriteName(els.favoritoNombre.value);
+  els.favoritoNombre.value = nombre;
 
   if (!nombre) {
     alert("Debes escribir un nombre para el favorito.");
@@ -395,12 +405,6 @@ function openModal(modalEl) {
 
 function closeModal(modalEl) {
   modalEl.classList.add("hidden");
-}
-
-function closeModalById(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.add("hidden");
 }
 
 async function exportTemplatesAsJson() {
@@ -493,7 +497,7 @@ function sanitizeFavorites(arr) {
     .map((item) => ({
       id: item.id || createId(),
       templateId: item.templateId || null,
-      nombre: safeString(item.nombre),
+      nombre: limitFavoriteName(safeString(item.nombre)),
       texto: safeString(item.texto),
       color: item.color || getRandomColor()
     }))
@@ -502,6 +506,10 @@ function sanitizeFavorites(arr) {
 
 function safeString(value) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function limitFavoriteName(value) {
+  return safeString(value).trim().slice(0, MAX_FAVORITO_NOMBRE);
 }
 
 function normalizeText(value) {
@@ -515,15 +523,25 @@ function normalizeText(value) {
 function getRandomColor() {
   const palette = [
     "linear-gradient(135deg, #ef4444, #f97316)",
-    "linear-gradient(135deg, #eab308, #f59e0b)",
+    "linear-gradient(135deg, #f97316, #fb923c)",
+    "linear-gradient(135deg, #f59e0b, #facc15)",
+    "linear-gradient(135deg, #eab308, #fde047)",
+    "linear-gradient(135deg, #84cc16, #22c55e)",
     "linear-gradient(135deg, #22c55e, #14b8a6)",
+    "linear-gradient(135deg, #14b8a6, #06b6d4)",
     "linear-gradient(135deg, #06b6d4, #3b82f6)",
     "linear-gradient(135deg, #3b82f6, #6366f1)",
+    "linear-gradient(135deg, #6366f1, #8b5cf6)",
     "linear-gradient(135deg, #8b5cf6, #a855f7)",
+    "linear-gradient(135deg, #a855f7, #d946ef)",
+    "linear-gradient(135deg, #d946ef, #ec4899)",
     "linear-gradient(135deg, #ec4899, #f43f5e)",
-    "linear-gradient(135deg, #14b8a6, #10b981)",
+    "linear-gradient(135deg, #10b981, #34d399)",
+    "linear-gradient(135deg, #0ea5e9, #38bdf8)",
+    "linear-gradient(135deg, #8b5cf6, #60a5fa)",
     "linear-gradient(135deg, #f97316, #ef4444)",
-    "linear-gradient(135deg, #6366f1, #8b5cf6)"
+    "linear-gradient(135deg, #14b8a6, #10b981)",
+    "linear-gradient(135deg, #f43f5e, #fb7185)"
   ];
 
   return palette[Math.floor(Math.random() * palette.length)];
@@ -554,15 +572,37 @@ function showToastFallback(message) {
 }
 
 function getStorage(key) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([key], (result) => {
-      resolve(result[key]);
-    });
+  return new Promise((resolve, reject) => {
+    try {
+      EXT_API.storage.local.get([key], (result) => {
+        const runtimeError = EXT_API.runtime?.lastError;
+        if (runtimeError) {
+          reject(new Error(runtimeError.message));
+          return;
+        }
+
+        resolve(result?.[key]);
+      });
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
 function setStorage(key, value) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: value }, () => resolve());
+  return new Promise((resolve, reject) => {
+    try {
+      EXT_API.storage.local.set({ [key]: value }, () => {
+        const runtimeError = EXT_API.runtime?.lastError;
+        if (runtimeError) {
+          reject(new Error(runtimeError.message));
+          return;
+        }
+
+        resolve();
+      });
+    } catch (error) {
+      reject(error);
+    }
   });
 }
